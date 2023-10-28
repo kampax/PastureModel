@@ -61,12 +61,15 @@ Map.addLayer(prec_mean, {min:150, max:1700, palette: ["ff1306","e4ff12","08ff28"
 /////////////////////////////////////////////////
 
 // Load the layers of coverage of the rasterized sipna 
-// you can select between the different versions of SIPNA by changing the year (eg 2023)
+// you can select between the different versions of SIPNA by changing the year (eg 2023, 2022, 2020)
+// NOTE!: We recommend using SIPNA 2020 for the years 2009-2012
+//SIPNA 2022 for the years 2012-2016 and SIPNA 2023 for the years 2016-2020.
+//This is because the SIPNA were prepared from orthophotos that do not correspond to their year of publication (SIPNA2023= Ortofotos 2020, SIPNA2022 = Ortofotos 2016, SIPNA2020= Ortofotos 2013)
 var sipna_arb = ee.Image("users/cnav/Sipna/raster/SIPNA2020_d_arb_5m");
 var sipna_herb = ee.Image("users/cnav/Sipna/raster/SIPNA2020_d_herb_5m").rename("herb");
 var sipna_mat = ee.Image("users/cnav/Sipna/raster/SIPNA2020_d_mat_5m").rename("mat");
 
-//I calculate the cover value from the SIPNA using the herbaceous and scrub cover
+// Calculate the cover value from the SIPNA using the herbaceous and scrub cover
 // To avoid that the parts without data remain as without data in the sum I use unmask that fills these places with 0 using the other layer as a reference
 var cobertura0 = sipna_herb.add(sipna_mat.unmask(ee.Image(0))).rename("cobertura");
 var cobertura1 = sipna_mat.add(sipna_herb.unmask(ee.Image(0))).rename("cobertura");
@@ -89,7 +92,7 @@ var cobertura = cobertura.updateMask(mask_arb2);
 Map.addLayer(cobertura, {min: 5, max:100, palette: ["ff180c","faff0e","0fce0d"]}, "SIPNA added coverage", 0 );
 
 //////////////////////////////////////////////////
-// //////////////3) Pisos bioclimaticos///////////
+// //////////////3) Bioclimatics Floors///////////
 /////////////////////////////////////////////////
 
 //Load the layer of "Pisos Bioclimaticos" derived from the work of Rivas-Martinez 1983
@@ -99,6 +102,9 @@ Map.addLayer(cobertura, {min: 5, max:100, palette: ["ff180c","faff0e","0fce0d"]}
 // The download link is https://portalrediam.cica.es/descargas?path=%2F04_RECURSOS_NATURALES%2F01_BIODIVERSIDAD%2F01_VEGETACION_ECOSISTEMAS%2F04_BIOGEOGRAFIA%2FPisosBioclim_10
 // The pisos have the following values 1 (Crioromediterraneo), 4 (Oromediterraneo), 7 (Supramediterraneo), 11 (Mesomediterraneo), 15 (Termomediterraneo)
 //It is a layer of 10 meters of pixel resolution
+
+//You can also use bioclimatic floors prepared from climatic data and grouped every 5 years using this collection of images and changing the years the codes area the same
+//users/cnav/Pisos_bioclimaticos/5years
 
 //Visualize the pisos bioclimaticos layer on the map
 Map.addLayer(pisos, {min:1, max:30, palette: ["ff3506", "ffed0a","0aff13","0cfeff","0e2aff"]}, "Pisos Bioclimaticos", 0);
@@ -111,7 +117,7 @@ Map.addLayer(pisos, {min:1, max:30, palette: ["ff3506", "ffed0a","0aff13","0cfef
 
 ///Join the LUCL layers (shrubland and grassland (10 and 1 respectively)) with pisos Bioclimaticos ()
 
-var tipo = ee.Image("users/cnav/Sipna/raster/SIPNA2020_tipo_5m");
+var tipo = ee.Image("users/cnav/Sipna/raster/SIPNA2022_tipo_5m");
 
 var crs = tipo.projection().getInfo();
 
@@ -120,12 +126,12 @@ pisos = pisos.reproject(crs.crs, crs.transform);
 
 var tipo_piso = pisos.multiply(tipo).round().toByte().rename('source');
 
-//Map.addLayer(tipo_piso, {min:1, max:150}, "Tipo de pastos / piso Bioclimatico", 0);
+
 // ///////////////////////////////////////////////////////////////////////////
 // /////////////////5) Available metabolic energy calculation/////////////////
 // ///////////////////////////////////////////////////////////////////////////
 
-// //// The pisos have the following values 1 (Crioromediterraneo), 4 (Oromediterraneo), 7 (Supramediterraneo), 11 (Mesomediterraneo), 15 (Termomediterraneo)
+// //// The bioclimatic floors have the following values 1 (Crioromediterraneo), 4 (Oromediterraneo), 7 (Supramediterraneo), 11 (Mesomediterraneo), 15 (Termomediterraneo)
 // //The values for the SIPNA layer are 1 for shrub and 10 for grass.
 //// The combination are: 1(Matorrales Crioromediterraneo), 4(Matorrales Oromediterraneo), 7 (Matorrales Supramediterraneo), 11(Matorrales Mesomediterraneo), 15(Matorrales Termomediterraneo) 
 // 10 (Pastizales Crioromediterraneo), 40 (Pastizales Oromediterraneo), 70 (Pastizales Supramediterraneo), 110 (Pastizales Mesomediterraneo), 150 (Pastizales Termomediterraneo)
@@ -229,7 +235,7 @@ var ndviS2= dataset.map(ndvi_f);
 //Calculate an average NDVI value
 var ndviS2=ndviS2.mean();
 
-// Based on regresion model
+// Based on regresion model where they relate SIPNA coverage and Sentinel 2 NDVI
 //y=α+βx 
 //β=Pendiente=79.618
 //α=Intercept = 44.412
@@ -239,14 +245,24 @@ var ndviS2= ndviS2.expression("float(79.618* ndvi + 38.67)", {
   "ndvi":ndviS2.select("NDVI")
 }).rename('NDVI');
 
+//To avoid coverage values greater than 100%, we code the coverage values to a maximum of 100.
+
+// Create a mask for values greater than 100
+var mask = ndviS2.lte(100);
+var mask2 = ndviS2.gte(0);
+
+// Replace values greater than 100 by 1 using the 'recode' function
+var ndviS2 = ndviS2.updateMask(mask).unmask(100);
+var ndviS2 = ndviS2.updateMask(mask2);
+
 
 //Add the NDVI layer
 Map.addLayer(ndviS2, {min: 5, max: 100, palette:['ff180c','faff0e', '0fce0d']}, "NDVI mean 2017", 0);
 
 
-// //////////////////////////////////////////////////
-// /////////////////7) Calculo de EMD NDVI ////////////////
-// //////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////
+// /////////////////7) EMD based on NDVI calulation ////////////////
+// ////////////////////////////////////////////////////////////////
 
 
 // Apply the function according to the type of pasture
@@ -268,7 +284,7 @@ var PasturesModel_v2Complete =  PasturesModel_v2.rename('EMDComplete');
 
 
 // ////////////////////////////////////////////////////////////////////////////
-// /////////////////8) Enmascaramiento de los modelos generados////////////////
+// /////////////////8) Masking of generated models////////////////////////////
 // ///////////////////////////////////////////////////////////////////////////
 
 
@@ -302,11 +318,11 @@ EMD = EMD.updateMask(mahalanobisBin);
 
 
 
-// ////////////////////////////////////////////////////////////////////////////
-// /////////////////9) Grado de incertidumbre en base al n y r2////////////////
-// ///////////////////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////////////////////////////
+// /////////////////9) Add the degree of uncertainty based on n and r2 values////////////////
+// //////////////////////////////////////////////////////////////////////////////////////////
 
-// //// The pisos have the following values 1 (Crioromediterraneo), 4 (Oromediterraneo), 7 (Supramediterraneo), 11 (Mesomediterraneo), 15 (Termomediterraneo)
+// //// The bioclimatics floors have the following values 1 (Crioromediterraneo), 4 (Oromediterraneo), 7 (Supramediterraneo), 11 (Mesomediterraneo), 15 (Termomediterraneo)
 // //The values for the SIPNA layer are 1 for shrub and 10 for grass.
 //// The combination are: 1(Matorrales Crioromediterraneo), 4(Matorrales Oromediterraneo), 7 (Matorrales Supramediterraneo), 11(Matorrales Mesomediterraneo), 15(Matorrales Termomediterraneo) 
 // 10 (Pastizales Crioromediterraneo), 40 (Pastizales Oromediterraneo), 70 (Pastizales Supramediterraneo), 110 (Pastizales Mesomediterraneo), 150 (Pastizales Termomediterraneo)
@@ -351,7 +367,7 @@ Map.addLayer(PasturesModel_v2, {bands: ["EMD"], min:0, max: 10644, palette:["410
 
 // Add Date
 
-// Define la fecha manualmente en el formato deseado (puedes utilizar una fecha de JavaScript)
+// Set the date manually in the desired format (you can use a JavaScript date)
 var date = ee.Date(initialYear+'-01-01');
 var date2 = ee.Date(initialYear+'-12-31');
 
@@ -403,7 +419,7 @@ Map.addLayer(masks, {min:0, max:1}, "masks", 0);
 ///OUTPUTS///
 /////////////
 
-//EMD con 4 bandas EMD recortado, n values, r2 values, EMD completo
+//EMD with 4 bands EMD clip, n values, r2 values, EMD complete
 //masks con 8 bandas MergedMasks, MaskTrees, CovLess20%, PrecLess20%, y las capas con las distancias de Mahalanobis Termo, Oro, Supra, Meso
 
 ///////////////////////////////////////////////////////////
@@ -429,21 +445,24 @@ Export.image.toAsset({
   region:Andalucia,
   maxPixels:1e13
   });
-// Export.image.toAsset({
-//   image: PasturesModel_v2, 
-//   description: "Available_Metabolic_Energy_NDVI"+initialYear, 
-//   assetId: "EMD/Available_Metabolic_Energy_NDVI_"+initialYear,
-//   scale: 10,
-//   region:Andalucia,
-//   maxPixels:1e13
-//   });
+  
+// Exporting the EMD models generated from the NDVI layer
+
+Export.image.toAsset({
+  image: PasturesModel_v2, 
+  description: "Available_Metabolic_Energy_NDVI"+initialYear, 
+  assetId: "EMD/Available_Metabolic_Energy_NDVI_"+initialYear,
+  scale: 10,
+  region:Andalucia,
+  maxPixels:1e13
+  });
 
 
 ///////////////////////////////////////////////////////////
 ///////////13) Extract the values//////////////////////////
 ///////////////////////////////////////////////////////////
 
-var sitios = ee.FeatureCollection("users/CarlosNavarro/SitiosPasseraPiso");
+var sites = ee.FeatureCollection("users/CarlosNavarro/SitiosPasseraPiso");
 var tipo_modelo = "_2_param";
 
 
@@ -461,7 +480,7 @@ var reducers = ee.Reducer.minMax()
 
 // Apply the reducers
 var result = PasturesModel_v2.reduceRegions({
-  collection: sitios,
+  collection: sites,
   reducer: reducers,
   scale: 10  // Ajustar la escala 
 });
@@ -478,7 +497,7 @@ Export.table.toDrive({
   
 /////////////////////////////////////
 
-Map.addLayer(sitios, {}, "Sitios Passera", 0);
+Map.addLayer(sites, {}, "Passera Sites", 0);
 
 Map.centerObject(AOI, 11);
 
