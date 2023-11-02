@@ -9,6 +9,10 @@ The precipitation data is derived from REDIAM and the land use map comes from th
 
 Here three workflows are presented to obtain available metabolic energy maps:
 1) First the bioclimatic floors are defined
+2) The climatic zones that present similar characteristics to the original study sites of the Thesis were calculated.
+3) The calculation of the available metabolic energy was made taking into account the bioclimatic floors and using the layers created in the previous step as masks.
+
+## 1) Definition of Bioclimatic floors
 The maps generated correspond to the bioclimatic floors following the criteria of the work of Rivas-Martínez (1987)
 The Rivas – Martínez criteria for delimiting bioclimatic floors in the Mediterranean region are the following:
 
@@ -28,15 +32,10 @@ Mn: Average maximum temperature of the coldest month ºC. (Source: REDIAM)
 It: Rivas-Martinez thermality index [It = (T + m + Mn) * 10]
 H: Frost Period, depending on the months (in the table in Roman numerals) this variable was not computed
 To assign each pixel to a bioclimatic floor, at least three of the five criteria must be met.
-
-3) The climatic zones that present similar characteristics to the original study sites of the Thesis were calculated.
+## 2) Areas with climatic similarity (based on Mahalanobis distances)
 The goal of this step is to create areas of confidence where the metabolic energy map can be used with a greater degree of certainty. This layer serves to identify sites with climatic and topographic characteristics similar to the sites where the equations were calibrated. The places that are within this area have high confidence in the models since they are located in areas where the climatic characteristics are very similar to the originals sites.
 __Mahalanobis distance__ is a statistical measure used to evaluate the similarity or difference between two sets of multivariate data. In this context we use the Mahalanobis distance to help determine which geographic areas have similar climate patterns to the original sites Passera studied in his doctoral thesis. This algorithm calculates the Mahalanobis distance and subsequently extracts the 90th percentile, where small distance values indicate greater environmental similarity.
 
-4) The calculation of the available metabolic energy was made taking into account the bioclimatic floors and using the layers created in the previous step as masks.
-
-## 1) Definition of Bioclimatic floors
-## 2) Areas with climatic similarity (based on Mahalanobis distances)
 ## 3) Calculation of available metabolic energy
 With this algorithm, Passera's equations are applied using the annual accumulated precipitation values (in mm) and grass cover values (in %). Different equations are applied depending on the type of pasture (herbaceous or shrub) and according to the bioclimatic floor where it is applied
 |**Bioclimatic floor**|**type** |**code**|**n**|**R2**|<p>**Equation**</p><p></p>|
